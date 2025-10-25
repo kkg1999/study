@@ -1,6 +1,6 @@
 import java.io.*;
 import java.util.*;
-
+// https://cses.fi/problemset/task/1667/
 class MessageRoute{
 	public static void main(String[] args) throws IOException {
 		BufferedReader br = new BufferedReader( new InputStreamReader(System.in) );
