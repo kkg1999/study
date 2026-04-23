@@ -1,0 +1,141 @@
+DSA - 
+ - LRU cache
+ - sudoku solver
+ - Given a string and a number of rows, print the string in zigzag traversal.
+ - Given digits, print all possible strings like a phone keypad.
+ - Graph question on finding the maximum distance between any two nodes 
+ - Given an array of product prices in non-decreasing order and a list of queries, where each query is a pair:
+	the first element indicates the index from which we need to start buying products, and
+    the second element indicates the amount that can be spent to buy products starting from the given index,
+	we need to buy the maximum possible number of products.
+ - https://leetcode.com/problems/remove-all-adjacent-duplicates-in-string-ii/description/
+ - https://leetcode.com/problems/longest-substring-without-repeating-characters
+ - adding polynomials (idk)
+ - all possible full binary trees
+ 	- follow up - total number of unique combinations
+ - Maximum Profit Triplet  - fenwick tree possible approach
+ 	An analyst is reviewing stock performance over n days.
+	You are given two arrays:
+		price[i]: stock price on day i
+		profit[i]: profit on day i
+	You need to find a triplet of days (i, j, k) such that:	i < j < k (days are in chronological order)
+	price[i] < price[j] < price[k] (prices are strictly increasing)
+	The total profit
+	profit[i] + profit[j] + profit[k]
+	is maximized
+ -  Check if a string is a k-tolerant palindrome (can delete at most k characters to make it a palindrome).
+
+
+ 
+HLD 
+ - HLD of Metric Collection system
+ - HLD of design Google like news feed
+ - HLD Design API Rate Limiter
+ - Job scheduler
+ - Coffee Ordering System HLD
+ - design login page
+ - building contact centers
+ - databases, sharding, partitioning, scalability
+ - design a marketing campaign
+ - authentication system
+ - distributed priority queue
+ - URL shortener
+ - google drive/dropbox
+ - notification system - failure handling, choice of db
+ - LFU
+ - feature flag service
+ - Flash sale system
+ -  design a system to schedule incoming jobs to workers, where:
+	    There were certain rules how the jobs will be allocated to each worker.
+	    There was a certain maximum capacity for each each worker.
+	    Jobs neede to be scheduled or assigned to each worker in a certain manner for the 1st cycle and then needs to handled differently in the next cycles.
+	We discussed:
+	    Jenkins and Kubernetes
+	    Overall system design mostly HLD
+	    Some discussion over scaling
+	    Class interfaces
+	    All the relationships between classes
+	    Later we discussed Network layer and Application layer and different routing and logging techniques as he was explaing his team's work.
+
+
+LLD
+ - LLD of Spotify 
+ 	- how password is actually stored by BCrypt
+ - LLD Splitwise
+ - LLD of elevator system
+ - LLD of logger
+ - Observer pattern - youtube notification - working code
+ - From above - Kafka
+ - Parking lot - multithreaded
+ - Meeting room reservation
+  - view all available meeting rooms for a given time interval.
+  - book a meeting room if it is free during the requested time.
+  - cancel an existing meeting.
+  - Handle overlapping meeting requests gracefully.
+  - Ability to list all meetings scheduled for a given room or employee.
+  - Support recurring meetings (optional enhancement).
+  - Concurrency: Handle race conditions where two users try to book the same room at the same time.
+
+ - Implement a connection pool.
+ 	1. Its a connection pool of 1000 - 2000 connections 
+	2. The developers who will use your interface can request for a connection. 
+	3. If there is a free connection in the pool, you give the connection to the requester.
+	4. Once the connection is used by the developer, they can return back the connection to the pool Or close the connection.
+	5. If the connection is closed, create a new connection and keep it in the pool. The count of the connections should be maintained throughout.
+	6. A Connection will have 3 states - FREE, BLOCKED, CLOSED. 
+	7. If the connections in the pool are exhausted, and requests for connections are coming from developers, keep an in-house mechanism to a default timeout and reject the request if there is no connection being freed within that default timeout. If you get a connection within the time, return the connection. 
+
+ - We were given a system with multiple microservices, and I had to design a Service Dependency Impact Analyzer.
+	The goal was to determine:
+	    The impact if one service fails
+	    The depth of the impact
+	    Whether there are cyclic dependencies in the system
+	Core functionalities, including:
+	    Traversal logic to measure impact
+	    Depth calculation
+	    Cycle detection in a directed graph
+
+ - I had to implement a ride sharing system. Some condtions were there.
+    Multiple passengers can request rides, and the available drivers take them on their journeys.
+    However, each passenger must be assigned exactly one driver, and no driver can take more than one passenger at a time.
+    If all drivers are busy, passengers must wait until one becomes available. Passengers get assigned to the first available driver.
+    Drivers are reassigned immediately after they complete a ride.
+    Guarantee that exactly one driver serves each passenger.
+    No two passengers are assigned the same driver simultaneously.
+    Ensure that multiple passengers and drivers can interact concurrently without any conflicts.
+    The platform needs to ensure thread safety and prevent race conditions.
+    I had to use ExecutorService, Manual time outs to simulate the system.
+    BlockingQueues, Concurrent Data structures to make it thread safe.
+    This was more of a design based plus algo question.
+
+
+
+
+Parking Lot -- "Strategy (pricing/parking logic), Factory, Singleton. Multi-threaded concurrency is almost always a follow-up."
+Connection Pool -- "Thread safety, internal queues, connection states (FREE, BLOCKED, CLOSED), and request timeouts."
+Notification Service -- "Extensible class diagrams, Observer pattern, APIs, and handling delivery failures or retries."
+Cab Booking (Uber) -- "State management, Strategy pattern for dynamic fare calculation, and concurrent driver/passenger matching."
+Elevator System -- "State pattern (Moving Up, Moving Down, Idle) and efficient request queuing for multiple lifts."
+Meeting Room Scheduler -- "Interval overlapping logic, recurrent meetings, and efficient querying for free time slots."
+LRU / LFU Cache  -- "O(1) read/write using HashMaps combined with Doubly Linked Lists, ensuring thread-safe evictions."
+Mini RPC Framework -- "Registry of methods, serialization (marshalling), networking, and asynchronous callbacks."
+E-Commerce Cart -- "Clean abstraction, shipping rules, and handling inventory locks."
+
+
+
+
+Salesforce heavily tests for "multi-tenant" and enterprise-scale thinking, especially for SMTS and LMTS roles.
+Workflow / Rule Engine: Designing a system that evaluates business rules dynamically without hardcoding them (metadata-driven).
+Role-Based Access Control (RBAC): Designing a permission system that securely handles users, roles, and granular data access.
+CRM Object Model: Designing core entities (Accounts, Leads, Contacts, Opportunities) with flexible, extensible relationships.
+
+Essential Design Patterns
+- Strategy Pattern: Essential for varying algorithms (e.g., Fare calculation in cab booking, Pricing rules in a shopping cart).
+- State Pattern: Critical for state machines (e.g., Elevator movement, Connection Pool lifecycle states).
+- Observer Pattern: Core for asynchronous events and triggers (e.g., Notification delivery).
+- Factory Pattern: For decoupling the creation of complex objects or varying implementations.
+
+Salesforce interviewers consistently introduce multi-threaded follow-ups or base the entire question (like the Connection Pool) on resource scarcity.
+	- Thread Safety: Preventing race conditions and deadlocks using C++ (std::mutex, std::unique_lock, std::shared_mutex) or Java (ReentrantLock, synchronized).
+	- Producer-Consumer Coordination: Mastering C++ std::condition_variable or Java BlockingQueue for task orchestration.
+	- Lifecycle Management: Understanding thread pools (Java ExecutorService or custom C++ worker pools) and safely handling thread starvation or timeouts.

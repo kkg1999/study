@@ -1,0 +1,25 @@
+Topic,Problem Pattern
+Streams,"Given a stream of timestamps and messages, return the count of a specific message in the last T seconds."
+Graphs,"Finding the ""best"" path where nodes represent movies or products and edges are ""similarity"" scores."
+Intervals,"Merging intervals or finding the maximum number of overlapping tasks with a ""cooldown"" period."
+DP + Bitmask,"Small-scale optimization problems (e.g., N<20) that require visiting all states."
+
+
+https://leetcode.com/discuss/post/6185127/2024-google-interview-questions-compilat-mjrf/
+https://leetcode.com/problem-list/7p55wqm/
+serialize and deserialize binary tree
+https://leetcode.com/problems/finding-mk-average/description/
+https://leetcode.com/problems/sudoku-solver/description/
+https://leetcode.com/problems/frog-jump/
+https://leetcode.com/problems/count-of-smaller-numbers-after-self
+- balance BST
+- NP complete - travelling salesman
+- trie
+
+
+googlyness: https://leetcode.com/discuss/post/5963463/googlyness-frequently-asked-questions-by-55sh/
+What do you do if someone stole your credit ?
+Till me a time when a task plan changed midway becuase of new information
+If you got a work in a very bad enviroment like people lack ethics etc. what will you do ?
+Have you stopped what you were doing before to help someone ?
+Tell me a time were you used a strength of yours to solve a problem.

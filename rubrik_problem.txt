@@ -1,0 +1,56 @@
+range-module, Hard
+maximum-points-after-enemy-battles, Med.
+maximize-subarray-sum-after-removing-all-occurrences-of-one-element, Hard
+manhattan-distances-of-all-arrangements-of-pieces, Hard
+count-lattice-points-inside-a-circle, Med.
+stamping-the-grid, Hard
+random-pick-with-weight, Med.
+candy-crush, Med.
+alice-and-bob-playing-flower-game, Med.
+distribute-candies-among-children-iii, Hard
+distribute-candies-among-children-i, Easy
+distribute-candies-among-children-ii, Med.
+find-longest-special-substring-that-occurs-thrice-ii, Med.
+existence-of-a-substring-in-a-string-and-its-reverse, Easy
+find-the-sum-of-subsequence-powers, Hard
+find-x-value-of-array-i, Med.
+find-x-value-of-array-ii, Hard
+lru-cache, Med.
+web-crawler-multithreaded, Med.
+insert-delete-getrandom-o1, Med.
+snapshot-array, Med.
+design-add-and-search-words-data-structure, Med.
+remove-invalid-parentheses, Hard
+task-scheduler, Med.
+next-permutation, Med.
+scramble-string, Hard
+web-crawler, Med.
+design-a-text-editor, Hard
+task-scheduler-ii, Med.
+4sum, Med.
+edit-distance, Med.
+design-circular-queue, Med.
+prefix-and-suffix-search, Hard
+special-binary-string, Hard
+design-bounded-blocking-queue, Med.
+cherry-pickup-ii, Hard
+design-memory-allocator, Med.
+You will receive a stream of data. For each item, return the minimum absolute difference between any two elements among the last K elements in the stream.
+implement Binary search tree - and find rank of the new insert element
+
+/// system coding
+
+== problem 1 == 
+== problem 2 ==
+==== problem 3 === 
+ log-structured storage and related topics like LSM
+
+///
+HLD
+- You need to build scp from machine 1 to machine 2  -> For huge File like of 1TB size.
+- Design a scalable and fault-tolerant data collection system that can collect logs and data from various sources (eg, application servers, tailing a file etc.) and route them to different destinations (e.g., Elasticsearch, Kafka, S3) for further processing and analysis.
+-  Design a system similar to LinkedIn Connections that can answer the query: "How many levels (or degrees) of connection exist between two users?" For example, direct connections are 1st-degree, friends of friends are 2nd-degree, and so on. The system should efficiently handle up to 1 billion users.
+- design a backup system
+- design data deduplication service
+- designing an FTP or Rsync-like system. The focus was mostly around core philosophies like fault tolerance and performance.
+- message queue: buiding a design component for messaging b/w services like Kafka, Rabbit MQ, along with HLD we also discussed the API design and pseudo code for API implementation logic for api's to be used b/w publishers and subscribers
