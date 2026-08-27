@@ -1,4 +1,4 @@
-# C++ Interview Notes — Fundamentals, Reordered for Learning
+# C++ fundamentals
 
 > **How to use this file**
 >
