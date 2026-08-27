@@ -1,7 +1,7 @@
-# C++ Concurrency Notes (Interview Revision)
+# C++ Concurrency Notes
 
 Covering: thread lifecycle, `std::atomic`, mutexes, RAII locks, condition variables,
-a full producer–consumer program, C++ version differences, and `using namespace std`.
+a full producer–consumer program, C++ version differences, `using namespace std`, and semaphores.
 
 Each part ends with a **60-second answer** — the compressed version to say out loud in an interview.
 
@@ -17,7 +17,8 @@ Each part ends with a **60-second answer** — the compressed version to say out
 6. [Full producer–consumer program](#part-6--full-producerconsumer-program)
 7. [C++ version differences + parens vs braces](#part-7--c-version-differences--parens-vs-braces)
 8. [Why `std::` and not `using namespace std`](#part-8--why-std-and-not-using-namespace-std)
-9. [Appendix: cheat sheets](#appendix--cheat-sheets)
+9. [Semaphores](#part-9--semaphores)
+10. [Appendix: cheat sheets](#appendix--cheat-sheets)
 
 ---
 ---
@@ -1741,6 +1742,400 @@ shows you understand name lookup rather than reciting a style rule.
 ---
 ---
 
+# Part 9 — Semaphores
+
+**Header:** `<semaphore>` · **Introduced:** C++20 *(the concept dates to Dijkstra, 1965)*
+
+## 9.1 The intuition
+
+A mutex answers *"can I go in?"* with yes/no for **one** thread.
+A semaphore answers *"are there any slots left?"* — it's a **counter with a waiting room**.
+
+> **A nightclub with a capacity sign.** The bouncer holds a count. Someone enters → count drops.
+> Someone leaves → count rises. At zero, arrivals queue outside until someone exits.
+
+That's the whole model. A semaphore is:
+
+```
+an integer counter  +  a queue of threads waiting for it to become positive
+```
+
+The counter is often called the number of **permits** (or tokens). Two operations:
+
+| Modern name | Classic name | Dijkstra | Effect |
+|---|---|---|---|
+| `acquire()` | `wait()` / `down()` | **P** (*proberen*, "to try") | If count > 0, decrement and proceed. Else **block**. |
+| `release()` | `signal()` / `up()` | **V** (*verhogen*, "to increment") | Increment the count; wake a waiter if any. **Never blocks.** |
+
+Note the asymmetry — **`acquire` can block, `release` never does.** That falls out of the counter
+model and matters later.
+
+## 9.2 The two flavors
+
+- **Counting semaphore** — count can be any value up to N. Models **N interchangeable resources**: a
+  connection pool, 4 GPU slots, a rate limiter.
+- **Binary semaphore** — count is only 0 or 1. Used as a **signal/flag between threads**, not usually
+  for mutual exclusion (see §9.5).
+
+In C++20 the binary version is literally an alias:
+
+```cpp
+using binary_semaphore = counting_semaphore<1>;
+```
+
+## 9.3 The C++20 API
+
+```cpp
+#include <semaphore>
+
+std::counting_semaphore<10> sem(3);   // ← template arg = MAX permits (compile-time)
+                                      // ← ctor arg    = INITIAL permits (runtime)
+
+sem.acquire();                        // block until a permit is available, then take one
+sem.release();                        // give back one permit
+sem.release(3);                       // give back 3 at once
+
+sem.try_acquire();                    // → bool, never blocks
+sem.try_acquire_for(100ms);           // → bool
+sem.try_acquire_until(timePoint);     // → bool
+
+std::counting_semaphore<10>::max();   // → static constexpr, the ceiling
+
+std::binary_semaphore sig(0);         // == counting_semaphore<1>, starts empty
+```
+
+**The two numbers are different things** — a very common point of confusion:
+
+```cpp
+std::counting_semaphore<10> sem(3);
+//                       ▲       ▲
+//         max = 10 ─────┘       └───── starts with 3 permits available
+```
+
+The template parameter is a **`LeastMaxValue`** — the implementation guarantees *at least* that
+ceiling, and uses it to pick an efficient internal representation. `counting_semaphore<1>` can be
+optimized down to a single atomic flag.
+
+Also: **`std::counting_semaphore` is not copyable or movable**, so like a mutex you pass it by
+reference (`std::ref` with `std::thread`).
+
+## 9.4 The canonical use — limiting concurrency
+
+The #1 real-world application: *"allow at most N threads in here at once."*
+
+```cpp
+std::counting_semaphore<3> slots(2);   // max 3, start with 2 permits
+
+void worker(int id) {
+    slots.acquire();          // ← wait for a free slot
+    doWork();                 // at most 2 threads are ever here
+    slots.release();          // ← give the slot back
+}
+```
+
+**Actual output** (5 threads, 2 permits, staggered arrivals, 500 ms of work each):
+
+```
+max permits this type can hold: 3
+[0 ms] T1 waiting for a slot ...
+[0 ms]    T1 ACQUIRED - working
+[70 ms] T2 waiting for a slot ...
+[70 ms]    T2 ACQUIRED - working
+[133 ms] T3 waiting for a slot ...      ← blocked, count is 0
+[195 ms] T4 waiting for a slot ...      ← blocked
+[257 ms] T5 waiting for a slot ...      ← blocked
+[504 ms]    T1 done - releasing
+[505 ms]    T4 ACQUIRED - working       ← ⚠ T4, not T3!
+[581 ms]    T2 done - releasing
+[581 ms]    T5 ACQUIRED - working       ← ⚠ T5, not T3!
+[1017 ms]    T4 done - releasing
+[1017 ms]    T3 ACQUIRED - working      ← T3 finally, having waited longest
+[1095 ms]    T5 done - releasing
+[1525 ms]    T3 done - releasing
+```
+
+Never more than 2 running. But look at the ordering:
+
+> **T3 waited longest and was served *last*.** Semaphores make **no fairness or FIFO guarantee.**
+> The standard says "unspecified which waiter is unblocked." Starvation is possible in principle.
+> Good detail to mention — it shows you read the guarantees rather than assuming.
+
+## 9.5 Semaphore vs mutex — the #1 interview question
+
+Almost always asked. The naive answer is *"a binary semaphore is a mutex."* **That's wrong**, and
+knowing why is the point.
+
+| | Mutex | Binary semaphore |
+|---|---|---|
+| **Ownership** | **Yes** — the locking thread owns it | **No** — it's just a count |
+| Who can release? | **Only the owner** | **Any thread** |
+| Purpose | Mutual exclusion (protect data) | Signalling (announce an event) |
+| Recursive variant | `recursive_mutex` exists | No such thing |
+| Priority inheritance | Possible | Impossible (no owner to boost) |
+| Starts as | unlocked | whatever you initialize it to |
+
+**Ownership is the entire distinction.** Everything else follows:
+
+- A mutex *can* implement priority inheritance because the kernel knows who holds it. A semaphore
+  can't — there's nobody to boost.
+- Deadlock-detection tools can build a lock-ownership graph for mutexes. Not for semaphores.
+- Unlocking a mutex you don't own is UB. Releasing a semaphore you never acquired is **perfectly
+  legal** — and is exactly how signalling works.
+
+> **A mutex is a lock. A semaphore is a signal.** Use a mutex when the same thread locks and
+> unlocks. Use a semaphore when **one thread signals and a different thread waits.**
+
+Corollary: **don't use a binary semaphore for mutual exclusion** if a mutex is available. You lose
+ownership checking, priority inheritance, and RAII — and gain nothing.
+
+## 9.6 Semaphore vs condition variable — the "memory" difference
+
+The sharpest conceptual contrast, and a direct extension of Part 5.
+
+**A condition variable is stateless. A semaphore has memory.**
+
+```cpp
+// Condition variable — notify with nobody waiting
+cv.notify_one();                  // ✗ VANISHES. Lost forever.
+cv.wait(lk, pred);                // would block, possibly forever
+
+// Semaphore — release with nobody waiting
+sem.release();                    // ✓ count goes 0 → 1. Remembered.
+sem.acquire();                    // returns INSTANTLY
+```
+
+Verified:
+
+```
+[1525 ms] released with no waiter; now acquiring...
+[1525 ms] acquired instantly - the permit was remembered
+```
+
+**Consequence:** the whole lost-wakeup problem — the reason CVs need a mutex and a predicate —
+**doesn't exist** for semaphores. The count *is* the state. A semaphore is essentially "a condition
+variable with its predicate built in."
+
+| | Condition variable | Semaphore |
+|---|---|---|
+| Needs an external mutex | **Yes, always** | **No** |
+| Needs a predicate loop | **Yes** (spurious wakeups) | **No** |
+| Signal with no waiter | **Lost** | **Counted** |
+| Arbitrary wait conditions | ✓ any predicate | ✗ only "count > 0" |
+| Wake all waiters | ✓ `notify_all()` | ✗ (only `release(n)`) |
+
+**When to pick which:** a semaphore when you're counting something (permits, items, completions). A
+condition variable when you're waiting on an **arbitrary predicate** over complex state — *"wait
+until the queue is non-empty AND we're not shutting down."* Not expressible with a raw count.
+
+## 9.7 Signalling between threads
+
+The other main use — and the one that shows off the no-ownership property:
+
+```cpp
+std::binary_semaphore ready(0);      // starts EMPTY
+
+// Thread A
+prepareData();
+ready.release();                     // ← signal. Doesn't block. Doesn't own anything.
+
+// Thread B
+ready.acquire();                     // ← wait for A's signal
+useData();                           // safe: release/acquire gives happens-before
+```
+
+One thread only releases; the other only acquires. **A mutex cannot do this** — the release would be
+from a non-owning thread, which is UB.
+
+Like every other primitive here, the memory ordering is guaranteed: **`release()` is a release
+operation, `acquire()` is an acquire operation**, so everything Thread A wrote before signalling is
+visible to Thread B after waiting. Same happens-before machinery as Part 2.
+
+## 9.8 Classic pattern: bounded buffer with semaphores
+
+Worth knowing because interviewers reach for it, and as a contrast with the CV version in Part 6.
+
+```cpp
+std::counting_semaphore<N> emptySlots(N);   // starts FULL — N free slots
+std::counting_semaphore<N> fullSlots(0);    // starts EMPTY — 0 items
+std::mutex m;                                // still needed to protect the buffer!
+
+// Producer
+emptySlots.acquire();                        // wait for space
+{ std::lock_guard<std::mutex> lg(m); buffer.push(item); }
+fullSlots.release();                         // announce an item
+
+// Consumer
+fullSlots.acquire();                         // wait for an item
+{ std::lock_guard<std::mutex> lg(m); item = buffer.pop(); }
+emptySlots.release();                        // announce a free slot
+```
+
+Three things to point out:
+
+1. **Two semaphores, one per direction** — mirroring the `notFull_`/`notEmpty_` CV pair in Part 6.
+2. **The mutex is still required.** The semaphores count slots; they don't protect the container's
+   internal state. Two producers holding different empty-slot permits could call `push()`
+   simultaneously.
+3. **Order matters — this is a deadlock:**
+
+   ```cpp
+   { std::lock_guard<std::mutex> lg(m);   // ✗ take the mutex FIRST...
+     emptySlots.acquire();                //   ...then block while holding it
+     buffer.push(item); }                 //   consumer can never get the mutex to drain
+   ```
+
+   **Never block on a semaphore while holding a mutex.** Acquire the semaphore *outside* the lock.
+
+## 9.9 Pitfalls
+
+**No RAII wrapper in the standard.** Unlike mutexes, there's no `semaphore_guard`. An exception
+between `acquire()` and `release()` leaks a permit permanently and the pool shrinks forever. Write
+one — mentioning this unprompted is a genuinely good signal:
+
+```cpp
+template <typename Sem>
+class SemGuard {
+    Sem& s_;
+public:
+    explicit SemGuard(Sem& s) : s_(s) { s_.acquire(); }
+    ~SemGuard()                       { s_.release(); }
+    SemGuard(const SemGuard&) = delete;
+};
+```
+
+- **Releasing more than you acquired** silently inflates the count and breaks the invariant.
+  Exceeding `max()` is **UB**. Nothing checks this — no ownership, remember.
+- **No fairness.** Demonstrated in §9.4. Don't design assuming FIFO.
+- **Semaphores don't compose.** Two semaphores acquired in inconsistent orders deadlock exactly like
+  two mutexes — and there's no `std::scoped_lock` equivalent to save you.
+- **Not recursive.** `acquire()` twice on a `binary_semaphore` from the same thread self-deadlocks.
+- **Pre-C++20 there is nothing portable.** If asked "what did you use before C++20?" — POSIX `sem_t`
+  / `sem_wait`, Windows `CreateSemaphore`, `boost::interprocess`, or roll your own from a mutex +
+  condition variable + counter (a good whiteboard exercise, ~15 lines).
+
+## 9.10 How it's implemented
+
+Same shape as a mutex — no kernel involvement unless you actually block:
+
+```
+acquire():  atomically decrement if count > 0   → done, no syscall
+            otherwise → futex/atomic wait       → thread goes BLOCKED
+
+release():  atomically increment
+            if waiters exist → futex wake       → a waiter goes BLOCKED → READY
+```
+
+In libstdc++ it's typically built directly on `std::atomic<T>::wait()`/`notify_one()` (also C++20),
+which is futex-backed on Linux and `WaitOnAddress` on Windows. Uncontended acquire/release is just
+an atomic RMW — nanoseconds.
+
+## 9.11 Where it sits among C++20's primitives
+
+| Primitive | Reusable? | Purpose |
+|---|---|---|
+| `counting_semaphore` | ✓ | Count N interchangeable permits |
+| `binary_semaphore` | ✓ | One-slot signal between threads |
+| `latch` | ✗ one-shot | Wait for N events to complete (count only goes down) |
+| `barrier` | ✓ per phase | N threads rendezvous repeatedly |
+
+A `latch` is roughly a **countdown-only semaphore that can't be reset**. A `barrier` is a reusable
+latch with an optional completion callback.
+
+## 9.12 Classic problems to have heard of
+
+- **Bounded buffer / producer-consumer** — §9.8. The one you must be able to write.
+- **Readers-writers** — many readers or one writer. In C++ you'd just use `std::shared_mutex`; the
+  semaphore version is the classic teaching exercise, with a writer-starvation variant.
+- **Dining philosophers** — 5 philosophers, 5 forks. Classic circular-wait deadlock; fixed by
+  breaking symmetry (one philosopher grabs forks in the opposite order) or a "waiter" semaphore
+  capping diners at 4.
+- **Rate limiter / connection pool** — the real-world one. `counting_semaphore<MAX_CONNS>`.
+
+## 9.13 Full runnable demo
+
+**Build:** `g++ -std=c++20 -Wall -pthread sem_demo.cpp -o sem`
+
+```cpp
+// sem_demo.cpp — a semaphore limiting concurrency to 2 out of 5 threads
+#include <chrono>
+#include <iostream>
+#include <mutex>
+#include <semaphore>
+#include <string>
+#include <thread>
+#include <vector>
+
+using namespace std::chrono_literals;
+
+std::counting_semaphore<3> slots(2);   // max 3, but START with 2 permits
+std::mutex gCoutM;
+auto gStart = std::chrono::steady_clock::now();
+
+void say(const std::string& msg) {
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                  std::chrono::steady_clock::now() - gStart).count();
+    std::lock_guard<std::mutex> lg(gCoutM);
+    std::cout << "[" << ms << " ms] " << msg << std::endl;
+}
+
+void worker(int id) {
+    say("T" + std::to_string(id) + " waiting for a slot ...");
+    slots.acquire();                                  // P / wait / down
+    say("   T" + std::to_string(id) + " ACQUIRED - working");
+    std::this_thread::sleep_for(500ms);
+    say("   T" + std::to_string(id) + " done - releasing");
+    slots.release();                                  // V / signal / up
+}
+
+int main() {
+    std::cout << "max permits this type can hold: "
+              << std::counting_semaphore<3>::max() << "\n";
+
+    std::vector<std::thread> ts;
+    for (int i = 1; i <= 5; ++i) {
+        ts.emplace_back(worker, i);
+        std::this_thread::sleep_for(50ms);            // stagger arrivals
+    }
+    for (auto& t : ts) t.join();
+
+    say("=== all done ===");
+
+    // Demonstrate: a semaphore HAS MEMORY (unlike a condition variable)
+    std::binary_semaphore sig(0);
+    sig.release();                                    // signal with NOBODY waiting
+    say("released with no waiter; now acquiring...");
+    sig.acquire();                                    // returns instantly - not lost
+    say("acquired instantly - the permit was remembered");
+}
+```
+
+## ⏱ 60-second answer — semaphores
+
+> A semaphore is a counter plus a wait queue. `acquire` decrements and blocks at zero; `release`
+> increments and wakes a waiter, and never blocks. It comes from Dijkstra's P and V operations. A
+> counting semaphore models N interchangeable resources — a connection pool or a concurrency
+> limiter; a binary semaphore is just `counting_semaphore<1>`.
+>
+> The key distinction from a mutex is **ownership**: a mutex is owned by the locking thread and only
+> that thread may unlock it, which is what enables priority inheritance and recursive variants. A
+> semaphore has no owner, so any thread can release one — that's a bug if you're doing mutual
+> exclusion, but it's exactly the point when you're signalling between threads. So: mutex is a lock,
+> semaphore is a signal.
+>
+> Versus a condition variable, the difference is memory. A CV is stateless — notify with no waiter is
+> lost, which is why it needs an external mutex and a predicate loop. A semaphore's count *is* the
+> state, so a release with no waiter is remembered and the next acquire returns immediately; no
+> lost-wakeup problem. The trade-off is that a CV can wait on any predicate, while a semaphore can
+> only wait on "count > 0."
+>
+> In C++ it's `std::counting_semaphore<MaxValue>` from C++20, where the template argument is the
+> ceiling and the constructor argument is the starting count. Main gotchas: there's no RAII guard in
+> the standard so an exception leaks a permit — write your own; there's no fairness guarantee about
+> which waiter wakes; and you must never block on a semaphore while holding a mutex.
+
+---
+---
+
 # Appendix — Cheat sheets
 
 ## A.1 Standard version cheat sheet
@@ -1763,7 +2158,7 @@ shows you understand name lookup rather than reciting a style rule.
 | `condition_variable_any::wait(lk, stop_token, pred)` | C++20 |
 | `std::atomic<T>::wait / notify_one / notify_all` | C++20 |
 | `std::atomic_ref`, `std::atomic<std::shared_ptr<T>>` | C++20 |
-| `std::latch`, `std::barrier`, `std::counting_semaphore` | C++20 |
+| `std::latch`, `std::barrier`, `std::counting_semaphore` / `binary_semaphore` (`<semaphore>`) | C++20 |
 | Parenthesized aggregate initialization | C++20 |
 
 ## A.2 "Which primitive do I reach for?"
@@ -1774,6 +2169,8 @@ shows you understand name lookup rather than reciting a style rule.
 | Multi-variable invariant / critical section | `std::mutex` + RAII lock |
 | Many readers, few writers, long critical sections | `std::shared_mutex` + `shared_lock` |
 | Wait until shared state changes | `std::condition_variable` |
+| Limit concurrency to N threads / pool of N resources | `std::counting_semaphore<N>` (C++20) |
+| One thread signals, a *different* thread waits | `std::binary_semaphore` (C++20) |
 | Wait for N tasks to finish (one-shot) | `std::latch` (C++20) |
 | Reusable phase rendezvous | `std::barrier` (C++20) |
 | Count a resource pool; notify must not be lost | `std::counting_semaphore` (C++20) |
@@ -1798,3 +2195,8 @@ shows you understand name lookup rather than reciting a style rule.
 13. `volatile` is **not** a threading primitive in C++.
 14. Never hold a lock across I/O, sleeps, `std::cout`, or unknown callbacks.
 15. Returning a reference from a locked getter defeats the lock — return a copy.
+16. Semaphore ≠ mutex: a semaphore has **no owner**, so any thread may `release()` it.
+17. A semaphore **remembers** a `release()` with no waiter; a CV's `notify` with no waiter is lost.
+18. No RAII guard for semaphores in the standard — an exception between acquire/release leaks a permit.
+19. Never block on `sem.acquire()` while holding a mutex — classic deadlock.
+20. `counting_semaphore<MAX>(INITIAL)` — template arg is the ceiling, ctor arg is the starting count.
